@@ -1,0 +1,14 @@
+{
+  "name": "app-scanner",
+  "version": "1.0.0",
+  "description": "Windows PC software and SaaS inventory scanner",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "scan": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sql.js": "^1.10.0"
+  }
+}

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App Scanner — Software & SaaS Inventory</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --border: #2d3148;
+    --text: #e4e6f0;
+    --text2: #8b8fa8;
+    --accent: #6c5ce7;
+    --accent2: #a29bfe;
+    --green: #00b894;
+    --orange: #fdcb6e;
+    --red: #e17055;
+    --blue: #74b9ff;
+    --pink: #fd79a8;
+    --radius: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.5; min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a1d27 0%, #242736 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 32px;
+    display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header h1 { font-size: 22px; font-weight: 700; }
+  .header h1 span { color: var(--accent2); }
+  .header-actions { display: flex; gap: 12px; align-items: center; }
+  .scan-btn {
+    background: var(--accent); color: white; border: none;
+    padding: 10px 24px; border-radius: var(--radius); cursor: pointer;
+    font-size: 14px; font-weight: 600; transition: all 0.2s;
+  }
+  .scan-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+  .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .scan-status { color: var(--text2); font-size: 13px; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px; margin-bottom: 28px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+  }
+  .stat-card .label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .stat-card .value.accent { color: var(--accent2); }
+  .stat-card .value.green { color: var(--green); }
+  .stat-card .value.orange { color: var(--orange); }
+  .stat-card .value.blue { color: var(--blue); }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 24px;
+    background: var(--surface); border-radius: var(--radius);
+    padding: 4px; border: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 10px 20px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: var(--text2);
+    transition: all 0.2s; white-space: nowrap; border: none; background: none;
+  }
+  .tab:hover { color: var(--text); background: var(--surface2); }
+  .tab.active { background: var(--accent); color: white; }
+
+  /* Search + Filter */
+  .toolbar {
+    display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .search-box {
+    flex: 1; min-width: 250px; padding: 10px 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-size: 14px;
+    outline: none; transition: border-color 0.2s;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .filter-btn {
+    padding: 8px 16px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text2); cursor: pointer;
+    font-size: 13px; transition: all 0.2s;
+  }
+  .filter-btn:hover, .filter-btn.active { border-color: var(--accent); color: var(--accent2); }
+
+  /* Tables */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .panel-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-header h2 { font-size: 16px; font-weight: 600; }
+  .panel-header .count {
+    background: var(--surface2); padding: 4px 10px; border-radius: 20px;
+    font-size: 12px; color: var(--text2);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; padding: 10px 16px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2);
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  th:hover { color: var(--text); }
+  th .sort-arrow { margin-left: 4px; opacity: 0.5; }
+  td {
+    padding: 10px 16px; font-size: 13px; border-bottom: 1px solid var(--border);
+    max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  tr:hover td { background: rgba(108, 92, 231, 0.05); }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 500;
+  }
+  .badge-purple { background: rgba(108,92,231,0.15); color: var(--accent2); }
+  .badge-green { background: rgba(0,184,148,0.15); color: var(--green); }
+  .badge-orange { background: rgba(253,203,110,0.15); color: var(--orange); }
+  .badge-blue { background: rgba(116,185,255,0.15); color: var(--blue); }
+  .badge-red { background: rgba(225,112,85,0.15); color: var(--red); }
+  .badge-pink { background: rgba(253,121,168,0.15); color: var(--pink); }
+
+  /* Frequency bar */
+  .freq-bar { display: flex; align-items: center; gap: 8px; }
+  .freq-bar .bar {
+    height: 6px; border-radius: 3px; background: var(--accent);
+    transition: width 0.3s;
+  }
+  .freq-bar .bar-bg {
+    flex: 1; height: 6px; border-radius: 3px; background: var(--surface2);
+    overflow: hidden; min-width: 60px;
+  }
+
+  /* Decision matrix */
+  .decision-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .decision-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; transition: all 0.2s;
+  }
+  .decision-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .decision-card h3 { font-size: 15px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .decision-card .meta { font-size: 12px; color: var(--text2); margin-bottom: 12px; }
+  .decision-card .metrics { display: flex; gap: 16px; flex-wrap: wrap; }
+  .decision-card .metric {
+    font-size: 12px;
+  }
+  .decision-card .metric .val { font-weight: 700; font-size: 16px; }
+  .build-score {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  }
+  .build-score.high { background: rgba(0,184,148,0.15); color: var(--green); }
+  .build-score.medium { background: rgba(253,203,110,0.15); color: var(--orange); }
+  .build-score.low { background: rgba(225,112,85,0.15); color: var(--red); }
+
+  /* Section spacing */
+  .section { margin-bottom: 28px; display: none; }
+  .section.active { display: block; }
+
+  /* Loading */
+  .loading {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 80px; color: var(--text2);
+  }
+  .spinner {
+    width: 40px; height: 40px; border: 3px solid var(--surface2);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center; padding: 80px 40px; color: var(--text2);
+  }
+  .empty-state h2 { font-size: 20px; margin-bottom: 8px; color: var(--text); }
+  .empty-state p { margin-bottom: 24px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .category-group { margin-bottom: 24px; }
+  .category-group h3 {
+    font-size: 14px; color: var(--text2); margin-bottom: 12px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+
+  .export-btn {
+    padding: 8px 16px; background: transparent; border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text2); cursor: pointer;
+    font-size: 13px; transition: all 0.2s;
+  }
+  .export-btn:hover { border-color: var(--accent); color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔍 App <span>Scanner</span></h1>
+  <div class="header-actions">
+    <span class="scan-status" id="scanStatus"></span>
+    <button class="export-btn" id="exportBtn" onclick="exportCSV()" style="display:none">Export CSV</button>
+    <button class="scan-btn" id="scanBtn" onclick="startScan()">Run Scan</button>
+  </div>
+</div>
+
+<div class="container">
+  <div id="statsBar" class="stats-bar" style="display:none"></div>
+
+  <div id="tabsContainer" style="display:none">
+    <div class="tabs" id="tabs"></div>
+    <div class="toolbar">
+      <input type="text" class="search-box" id="searchBox" placeholder="Search apps, domains, tools..." oninput="filterResults()">
+      <button class="filter-btn" id="freqFilter" onclick="toggleFreqFilter()">Frequently Used Only</button>
+    </div>
+  </div>
+
+  <div id="content">
+    <div class="empty-state">
+      <h2>Welcome to App Scanner</h2>
+      <p>Scan your Windows PC to discover all installed software, SaaS tools, and usage patterns.<br>
+        This helps you decide which apps to vibe code yourself vs. keep paying for.</p>
+      <button class="scan-btn" onclick="startScan()">Start Scanning</button>
+    </div>
+  </div>
+
+  <div id="loadingState" style="display:none">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Scanning your PC... This may take 1-3 minutes.</p>
+      <p style="font-size:12px; margin-top:8px">Reading registry, browser history, prefetch data, processes, services...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let scanData = null;
+let activeTab = "overview";
+let freqFilterOn = false;
+let sortState = {};
+
+const CATEGORY_COLORS = {
+  "Development Tools": "purple", "Development & DevOps": "purple",
+  "Productivity": "blue", "Productivity & Docs": "blue",
+  "Communication": "green", "Communication & Email": "green",
+  "Design & Creative": "pink", "Design & Media": "pink",
+  "AI & ML Tools": "orange", "AI Tools": "orange",
+  "Marketing & Analytics": "red",
+  "Finance & Payments": "orange",
+  "Learning & Reference": "blue",
+  "Security & Utilities": "red", "Security & Identity": "red",
+  "Social & Networking": "pink",
+  "Browsers": "green",
+  "Project & Knowledge Management": "purple",
+};
+
+function badgeFor(category) {
+  const color = CATEGORY_COLORS[category] || "purple";
+  return `<span class="badge badge-${color}">${category}</span>`;
+}
+
+async function startScan() {
+  document.getElementById("scanBtn").disabled = true;
+  document.getElementById("scanStatus").textContent = "Scanning...";
+  document.getElementById("content").style.display = "none";
+  document.getElementById("loadingState").style.display = "block";
+
+  try {
+    const res = await fetch("/api/scan", { method: "POST" });
+    const json = await res.json();
+    if (json.success) {
+      scanData = json.data;
+      renderAll();
+    } else {
+      alert("Scan failed: " + (json.error || "Unknown error"));
+    }
+  } catch (e) {
+    alert("Scan failed: " + e.message);
+  } finally {
+    document.getElementById("scanBtn").disabled = false;
+    document.getElementById("loadingState").style.display = "none";
+    document.getElementById("content").style.display = "block";
+  }
+}
+
+async function loadCached() {
+  try {
+    const res = await fetch("/api/data");
+    const data = await res.json();
+    if (data) {
+      scanData = data;
+      renderAll();
+    }
+  } catch {}
+}
+
+function renderAll() {
+  if (!scanData) return;
+  document.getElementById("scanStatus").textContent = `Last scan: ${new Date(scanData.scanTime).toLocaleString()} (${scanData.scanDuration})`;
+  document.getElementById("statsBar").style.display = "grid";
+  document.getElementById("tabsContainer").style.display = "block";
+  document.getElementById("exportBtn").style.display = "inline-block";
+
+  renderStats();
+  renderTabs();
+  switchTab(activeTab);
+}
+
+function renderStats() {
+  const s = scanData.stats;
+  const saasActive = scanData.saasUsage.filter(x => x.category !== "Uncategorized").length;
+  document.getElementById("statsBar").innerHTML = `
+    <div class="stat-card"><div class="label">Installed Apps</div><div class="value accent">${s.totalInstalled}</div></div>
+    <div class="stat-card"><div class="label">SaaS Tools Detected</div><div class="value green">${saasActive}</div></div>
+    <div class="stat-card"><div class="label">Running Processes</div><div class="value blue">${s.totalProcesses}</div></div>
+    <div class="stat-card"><div class="label">Startup Programs</div><div class="value orange">${s.totalStartup}</div></div>
+    <div class="stat-card"><div class="label">Store Apps</div><div class="value accent">${s.totalStoreApps}</div></div>
+    <div class="stat-card"><div class="label">Domains Visited</div><div class="value green">${s.totalSaasDomains}</div></div>
+  `;
+}
+
+const TAB_DEFS = [
+  { id: "overview", label: "🎯 Build vs Buy" },
+  { id: "installed", label: "💿 Installed Apps" },
+  { id: "saas", label: "🌐 SaaS & Web Tools" },
+  { id: "frequency", label: "📊 Usage Frequency" },
+  { id: "processes", label: "⚡ Running Now" },
+  { id: "startup", label: "🚀 Startup Programs" },
+  { id: "network", label: "🌍 Network Activity" },
+  { id: "store", label: "🏪 Store Apps" },
+];
+
+function renderTabs() {
+  document.getElementById("tabs").innerHTML = TAB_DEFS.map(t =>
+    `<button class="tab ${t.id === activeTab ? 'active' : ''}" onclick="switchTab('${t.id}')">${t.label}</button>`
+  ).join("");
+}
+
+function switchTab(id) {
+  activeTab = id;
+  renderTabs();
+  const content = document.getElementById("content");
+  switch (id) {
+    case "overview": content.innerHTML = renderOverview(); break;
+    case "installed": content.innerHTML = renderInstalled(); break;
+    case "saas": content.innerHTML = renderSaas(); break;
+    case "frequency": content.innerHTML = renderFrequency(); break;
+    case "processes": content.innerHTML = renderProcesses(); break;
+    case "startup": content.innerHTML = renderStartup(); break;
+    case "network": content.innerHTML = renderNetwork(); break;
+    case "store": content.innerHTML = renderStore(); break;
+  }
+}
+
+function getSearch() {
+  return (document.getElementById("searchBox")?.value || "").toLowerCase();
+}
+
+function filterResults() { switchTab(activeTab); }
+function toggleFreqFilter() {
+  freqFilterOn = !freqFilterOn;
+  document.getElementById("freqFilter").classList.toggle("active", freqFilterOn);
+  switchTab(activeTab);
+}
+
+// ============= BUILD VS BUY OVERVIEW =============
+function renderOverview() {
+  const search = getSearch();
+
+  // Merge installed + SaaS into unified list with scoring
+  const items = [];
+
+  // SaaS tools (from browser history)
+  const saasMap = {};
+  for (const s of scanData.saasUsage) {
+    if (s.category === "Uncategorized") continue;
+    if (search && !s.domain.includes(search) && !s.titles.join(" ").toLowerCase().includes(search) && !s.category.toLowerCase().includes(search)) continue;
+    const displayName = s.titles[0] || s.domain;
+    saasMap[s.domain] = true;
+    const score = computeBuildScore(s.totalVisits, s.category, "saas");
+    items.push({
+      name: displayName,
+      domain: s.domain,
+      type: "SaaS",
+      category: s.category,
+      visits: s.totalVisits,
+      lastUsed: s.lastVisit,
+      browsers: s.browsers,
+      buildScore: score,
+      buildLabel: score >= 7 ? "Strong Candidate" : score >= 4 ? "Consider" : "Keep Vendor",
+      buildClass: score >= 7 ? "high" : score >= 4 ? "medium" : "low"
+    });
+  }
+
+  // Installed apps
+  for (const app of scanData.installedPrograms) {
+    if (app.category === "Other") continue;
+    if (search && !app.DisplayName.toLowerCase().includes(search) && !app.category.toLowerCase().includes(search)) continue;
+    const freq = findFrequency(app.DisplayName);
+    const score = computeBuildScore(freq, app.category, "desktop");
+    items.push({
+      name: app.DisplayName,
+      domain: "",
+      type: "Desktop",
+      category: app.category,
+      visits: freq,
+      lastUsed: app.InstallDate || "",
+      publisher: app.Publisher,
+      buildScore: score,
+      buildLabel: score >= 7 ? "Strong Candidate" : score >= 4 ? "Consider" : "Keep Vendor",
+      buildClass: score >= 7 ? "high" : score >= 4 ? "medium" : "low"
+    });
+  }
+
+  items.sort((a, b) => b.buildScore - a.buildScore || b.visits - a.visits);
+
+  if (freqFilterOn) {
+    const filtered = items.filter(i => i.visits > 10);
+    return renderOverviewCards(filtered.length ? filtered : items);
+  }
+
+  return renderOverviewCards(items);
+}
+
+function computeBuildScore(usage, category, type) {
+  let score = 0;
+
+  // High usage = more reason to build
+  if (usage > 500) score += 3;
+  else if (usage > 100) score += 2;
+  else if (usage > 20) score += 1;
+
+  // Categories more amenable to vibe coding
+  const easyBuild = ["Productivity & Docs", "Productivity", "Project & Knowledge Management", "Marketing & Analytics", "Finance & Payments"];
+  const medBuild = ["Communication & Email", "Communication", "Learning & Reference", "Social & Networking"];
+  const hardBuild = ["Development & DevOps", "Development Tools", "Design & Creative", "Design & Media", "Security & Utilities", "Security & Identity", "AI & ML Tools", "AI Tools"];
+
+  if (easyBuild.includes(category)) score += 3;
+  else if (medBuild.includes(category)) score += 2;
+  else if (hardBuild.includes(category)) score += 1;
+
+  // SaaS = paying for it, more reason to replace
+  if (type === "saas") score += 2;
+
+  return Math.min(score, 10);
+}
+
+function findFrequency(appName) {
+  const lower = appName.toLowerCase();
+  for (const pf of scanData.appFrequency || []) {
+    if (pf.name.toLowerCase().includes(lower) || lower.includes(pf.name.toLowerCase())) {
+      return pf.runCount;
+    }
+  }
+  return 0;
+}
+
+function renderOverviewCards(items) {
+  if (!items.length) return '<div class="empty-state"><p>No matching items found.</p></div>';
+
+  // Group by build recommendation
+  const groups = { "Strong Candidate": [], "Consider": [], "Keep Vendor": [] };
+  for (const item of items) {
+    groups[item.buildLabel].push(item);
+  }
+
+  let html = '';
+  for (const [label, groupItems] of Object.entries(groups)) {
+    if (!groupItems.length) continue;
+    const cls = label === "Strong Candidate" ? "high" : label === "Consider" ? "medium" : "low";
+    html += `<div class="category-group">
+      <h3>${label === "Strong Candidate" ? "🟢" : label === "Consider" ? "🟡" : "🔴"} ${label} to Vibe Code (${groupItems.length})</h3>
+      <div class="decision-grid">`;
+
+    for (const item of groupItems) {
+      html += `
+        <div class="decision-card">
+          <h3>
+            <span class="build-score ${item.buildClass}">${item.buildScore}/10</span>
+            ${esc(item.name)}
+          </h3>
+          <div class="meta">
+            ${badgeFor(item.category)}
+            <span class="badge badge-${item.type === 'SaaS' ? 'green' : 'blue'}">${item.type}</span>
+            ${item.domain ? `<span style="color:var(--text2); margin-left:4px">${esc(item.domain)}</span>` : ''}
+          </div>
+          <div class="metrics">
+            <div class="metric"><div class="val">${item.visits.toLocaleString()}</div>${item.type === 'SaaS' ? 'visits' : 'launches'}</div>
+            ${item.lastUsed ? `<div class="metric"><div class="val" style="font-size:13px">${esc(item.lastUsed)}</div>last used</div>` : ''}
+            ${item.publisher ? `<div class="metric"><div class="val" style="font-size:13px">${esc(item.publisher)}</div>vendor</div>` : ''}
+            ${item.browsers?.length ? `<div class="metric"><div class="val" style="font-size:13px">${item.browsers.join(', ')}</div>browser</div>` : ''}
+          </div>
+        </div>`;
+    }
+    html += '</div></div>';
+  }
+  return html;
+}
+
+// ============= INSTALLED APPS =============
+function renderInstalled() {
+  const search = getSearch();
+  let apps = scanData.installedPrograms.filter(a => {
+    if (search && !a.DisplayName.toLowerCase().includes(search) && !(a.Publisher||'').toLowerCase().includes(search) && !a.category.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Group by category
+  const groups = {};
+  for (const app of apps) {
+    if (!groups[app.category]) groups[app.category] = [];
+    groups[app.category].push(app);
+  }
+
+  let html = '';
+  const sortedCats = Object.keys(groups).sort((a, b) => a === "Other" ? 1 : b === "Other" ? -1 : groups[b].length - groups[a].length);
+
+  for (const cat of sortedCats) {
+    const catApps = groups[cat];
+    html += `
+    <div class="panel" style="margin-bottom:16px">
+      <div class="panel-header">
+        <h2>${badgeFor(cat)} ${cat}</h2>
+        <span class="count">${catApps.length} apps</span>
+      </div>
+      <table>
+        <tr><th>Name</th><th>Version</th><th>Publisher</th><th>Install Date</th><th>Size</th></tr>
+        ${catApps.map(a => `
+          <tr>
+            <td>${esc(a.DisplayName)}</td>
+            <td>${esc(a.DisplayVersion || '-')}</td>
+            <td>${esc(a.Publisher || '-')}</td>
+            <td>${a.InstallDate || '-'}</td>
+            <td>${a.EstimatedSize ? (a.EstimatedSize / 1024).toFixed(1) + ' MB' : '-'}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>`;
+  }
+  return html || '<div class="empty-state"><p>No installed programs found.</p></div>';
+}
+
+// ============= SAAS =============
+function renderSaas() {
+  const search = getSearch();
+  let saas = scanData.saasUsage.filter(s => {
+    if (s.category === "Uncategorized" && !search) return false;
+    if (search && !s.domain.includes(search) && !s.titles.join(' ').toLowerCase().includes(search) && !s.category.toLowerCase().includes(search)) return false;
+    if (freqFilterOn && s.totalVisits < 10) return false;
+    return true;
+  });
+
+  const groups = {};
+  for (const s of saas) {
+    const cat = s.category || "Uncategorized";
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(s);
+  }
+
+  let html = '';
+  const sortedCats = Object.keys(groups).sort((a, b) => a === "Uncategorized" ? 1 : b === "Uncategorized" ? -1 : groups[b].length - groups[a].length);
+
+  for (const cat of sortedCats) {
+    const items = groups[cat];
+    const maxVisits = Math.max(...items.map(s => s.totalVisits));
+    html += `
+    <div class="panel" style="margin-bottom:16px">
+      <div class="panel-header">
+        <h2>${badgeFor(cat)} ${cat}</h2>
+        <span class="count">${items.length} tools</span>
+      </div>
+      <table>
+        <tr><th>Domain</th><th>Title</th><th>Visits</th><th>Usage</th><th>Last Visit</th><th>Browser</th></tr>
+        ${items.map(s => `
+          <tr>
+            <td><strong>${esc(s.domain)}</strong></td>
+            <td>${esc(s.titles[0] || '-')}</td>
+            <td>${s.totalVisits.toLocaleString()}</td>
+            <td><div class="freq-bar"><div class="bar-bg"><div class="bar" style="width:${(s.totalVisits/maxVisits*100).toFixed(0)}%"></div></div></div></td>
+            <td>${esc(s.lastVisit || '-')}</td>
+            <td>${s.browsers.join(', ')}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>`;
+  }
+  return html || '<div class="empty-state"><p>No SaaS tools detected.</p></div>';
+}
+
+// ============= FREQUENCY =============
+function renderFrequency() {
+  const search = getSearch();
+  let items = (scanData.appFrequency || []).filter(f => {
+    if (search && !f.name.toLowerCase().includes(search)) return false;
+    if (freqFilterOn && f.runCount < 10) return false;
+    return true;
+  });
+
+  const maxRuns = Math.max(...items.map(f => f.runCount), 1);
+
+  return `
+    <div class="panel">
+      <div class="panel-header">
+        <h2>App Launch Frequency (from Windows Prefetch)</h2>
+        <span class="count">${items.length} apps</span>
+      </div>
+      <table>
+        <tr><th>Application</th><th>Launch Count</th><th>Frequency</th><th>Last Launch</th><th>First Seen</th></tr>
+        ${items.map(f => `
+          <tr>
+            <td><strong>${esc(f.name)}</strong></td>
+            <td>${f.runCount.toLocaleString()}</td>
+            <td><div class="freq-bar"><div class="bar-bg"><div class="bar" style="width:${(f.runCount/maxRuns*100).toFixed(0)}%"></div></div></div></td>
+            <td>${esc(f.lastRun || '-')}</td>
+            <td>${esc(f.firstSeen || '-')}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>`;
+}
+
+// ============= PROCESSES =============
+function renderProcesses() {
+  const search = getSearch();
+  let procs = scanData.runningProcesses.filter(p => {
+    if (search && !p.Name.toLowerCase().includes(search) && !(p.Description||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  return `
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Currently Running Processes</h2>
+        <span class="count">${procs.length} processes</span>
+      </div>
+      <table>
+        <tr><th>Name</th><th>Description</th><th>Company</th><th>Memory (MB)</th><th>CPU (sec)</th><th>Window</th><th>Started</th></tr>
+        ${procs.map(p => `
+          <tr>
+            <td><strong>${esc(p.Name)}</strong></td>
+            <td>${esc(p.Description || '-')}</td>
+            <td>${esc(p.Company || '-')}</td>
+            <td>${p.MemoryMB || '-'}</td>
+            <td>${p.CPU_Seconds || '-'}</td>
+            <td>${esc(p.MainWindowTitle || '-')}</td>
+            <td>${esc(p.StartTime || '-')}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>`;
+}
+
+// ============= STARTUP =============
+function renderStartup() {
+  const search = getSearch();
+  let items = scanData.startupPrograms.filter(s => {
+    if (search && !s.Name.toLowerCase().includes(search) && !(s.Command||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  return `
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Startup Programs</h2>
+        <span class="count">${items.length} entries</span>
+      </div>
+      <table>
+        <tr><th>Name</th><th>Command</th><th>Source</th></tr>
+        ${items.map(s => `
+          <tr>
+            <td><strong>${esc(s.Name)}</strong></td>
+            <td style="max-width:500px">${esc(s.Command || '-')}</td>
+            <td>${esc(s.Source || '-')}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>`;
+}
+
+// ============= NETWORK =============
+function renderNetwork() {
+  const search = getSearch();
+  let items = scanData.networkConnections.filter(n => {
+    if (search && !n.ProcessName?.toLowerCase().includes(search) && !n.RemoteAddress?.includes(search)) return false;
+    return true;
+  });
+
+  // Group by process
+  const grouped = {};
+  for (const n of items) {
+    const key = n.ProcessName || "Unknown";
+    if (!grouped[key]) grouped[key] = { name: key, path: n.ProcessPath, connections: [] };
+    grouped[key].connections.push(n);
+  }
+
+  const groups = Object.values(grouped).sort((a, b) => b.connections.length - a.connections.length);
+
+  return `
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Active Network Connections</h2>
+        <span class="count">${items.length} connections from ${groups.length} processes</span>
+      </div>
+      <table>
+        <tr><th>Process</th><th>Remote Address</th><th>Remote Port</th><th># Connections</th></tr>
+        ${groups.map(g => `
+          <tr>
+            <td><strong>${esc(g.name)}</strong></td>
+            <td>${g.connections.map(c => esc(c.RemoteAddress)).filter((v,i,a) => a.indexOf(v)===i).slice(0,5).join(', ')}</td>
+            <td>${g.connections.map(c => c.RemotePort).filter((v,i,a) => a.indexOf(v)===i).slice(0,5).join(', ')}</td>
+            <td>${g.connections.length}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>`;
+}
+
+// ============= STORE APPS =============
+function renderStore() {
+  const search = getSearch();
+  let items = scanData.storeApps.filter(a => {
+    const name = (a.DisplayName || a.Name || '').toLowerCase();
+    if (search && !name.includes(search) && !(a.Publisher||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  return `
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Windows Store Apps</h2>
+        <span class="count">${items.length} apps</span>
+      </div>
+      <table>
+        <tr><th>Name</th><th>Version</th><th>Publisher</th><th>Installed</th></tr>
+        ${items.map(a => `
+          <tr>
+            <td><strong>${esc(a.DisplayName || a.Name)}</strong></td>
+            <td>${esc(a.Version || '-')}</td>
+            <td>${esc(a.Publisher || '-')}</td>
+            <td>${esc(a.InstalledDate || '-')}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>`;
+}
+
+// ============= EXPORT =============
+function exportCSV() {
+  if (!scanData) return;
+  let csv = "Type,Name,Category,Domain,Visits/Launches,Last Used,Build Score,Recommendation\n";
+
+  for (const s of scanData.saasUsage) {
+    if (s.category === "Uncategorized") continue;
+    const score = computeBuildScore(s.totalVisits, s.category, "saas");
+    const label = score >= 7 ? "Strong Candidate" : score >= 4 ? "Consider" : "Keep Vendor";
+    csv += `SaaS,"${s.titles[0]||s.domain}",${s.category},${s.domain},${s.totalVisits},"${s.lastVisit}",${score},${label}\n`;
+  }
+
+  for (const a of scanData.installedPrograms) {
+    if (a.category === "Other") continue;
+    const freq = findFrequency(a.DisplayName);
+    const score = computeBuildScore(freq, a.category, "desktop");
+    const label = score >= 7 ? "Strong Candidate" : score >= 4 ? "Consider" : "Keep Vendor";
+    csv += `Desktop,"${a.DisplayName}",${a.category},,${freq},"${a.InstallDate||''}",${score},${label}\n`;
+  }
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `app-inventory-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function esc(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
+// Load cached data on start
+loadCached();
+</script>
+</body>
+</html>
